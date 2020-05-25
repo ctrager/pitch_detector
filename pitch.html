@@ -45,9 +45,14 @@
         var steady_factor_input
         var fftsize_input
         var canvas_el
+        var start_button
 
         var number_of_staffs = 4
-        var prev_note = {letter: "", cents: 0, freq: 0}
+        var prev_note = {
+            letter: "",
+            cents: 0,
+            freq: 0
+        }
         var cents_threshold
         var queue_length
         var fftSize // 2048, 4096, 8192, 16384, 32768
@@ -67,6 +72,7 @@
             steady_factor_input = document.getElementById("steady_factor_input")
             fftsize_input = document.getElementById("fftsize_input")
             transpose_octave_input = document.getElementById("transpose_octave_input")
+            start_button = document.getElementById("start_button")
 
             canvas_el = document.getElementById("canvas_el")
             ctx = canvas_el.getContext("2d");
@@ -116,10 +122,22 @@
         }
 
         function restart() {
-            stop()
-
-            start()
+            if (running) {
+                running = false
+                start()
+            }
         }
+
+        function toggle_start_stop() {
+            if (running) {
+                running = false
+                start_button.innerText = "Click to Start"
+            } else {
+                start_button.innerText = "Running. Click to Stop"
+                start()
+            }
+        }
+
 
         function start() {
 
@@ -140,10 +158,6 @@
             draw_staff()
 
             requestAnimationFrame(frame_callback)
-        }
-
-        function stop() {
-            running = false
         }
 
         function frame_callback() {
@@ -180,7 +194,6 @@
 
                 let note = frequency_to_note(most_common_recent_frequency)
                 if (note) {
-                    note_el.innerText = JSON.stringify(note)
                     draw_note(note)
                 }
 
@@ -193,10 +206,10 @@
         const canvas_width = 800
         const canvas_height = 400
         var staff_number = 1
-        
+
         const line_height = 8
         const staff_spacing = 40
-        const note_spacing = 34 
+        const note_spacing = 34
 
         const ledger_line_half_length = 10
 
@@ -205,7 +218,7 @@
 
         var current_x = 0
         const sharp_line_length = 10
-         
+
 
         function draw_note(note) {
 
@@ -213,24 +226,6 @@
 
             if (note.freq == prev_note.freq) {
                 return
-            }
-
-            // if it's the same note, we'll just redraw with a different color
-            // so don't advance x, but if it is a different note, then advance
-            if (note.letter != prev_note.letter) {
-                current_x += note_spacing
-                if (prev_note.accidental == '#') {
-                   current_x += sharp_line_length * 2
-                }
-            }
-
-            // are we at the end of this staff?
-            if (current_x > (canvas_width - (2 * note_spacing))) {
-                staff_number++
-                if (staff_number > number_of_staffs) {
-                    draw_staff()
-                }
-                current_x = note_spacing
             }
 
             // enhance the note object
@@ -246,10 +241,30 @@
                 note.octave = parseInt(note.letter.charAt(2))
             }
 
-            var transposed_octave = note.octave += parseInt(transpose_octave_input.value)
+            // A#4 can becaome A#3 or A#5
+            note.octave = note.octave += parseInt(transpose_octave_input.value)
+            note.letter = note.just_letter + note.accidental + note.octave
+
+            // if it's the same note, we'll just redraw with a different color
+            // so don't advance x, but if it is a different note, then advance
+            if (note.letter != prev_note.letter) {
+                current_x += note_spacing
+                if (prev_note.accidental == '#') {
+                    current_x += sharp_line_length * 2
+                }
+            }
+
+            // are we at the end of this staff?
+            if (current_x > (canvas_width - (2 * note_spacing))) {
+                staff_number++
+                if (staff_number > number_of_staffs) {
+                    draw_staff()
+                }
+                current_x = note_spacing
+            }
 
             var offset_from_c = letter_array.indexOf(note.just_letter)
-            var offset_from_octave_4 = transposed_octave - 4
+            var offset_from_octave_4 = note.octave - 4
 
             var y = .5
 
@@ -268,7 +283,7 @@
             y -= offset_from_octave_4 * (3.5 * line_height)
             y -= offset_from_c * (line_height / 2)
 
-    
+
             if (note.cents > cents_threshold) {
                 ctx.fillStyle = "red"
             } else if (Math.abs(note.cents) > cents_threshold) {
@@ -285,29 +300,29 @@
             var acc_x = current_x - 3
             var note_width = line_height * 0.8
 
-            if (note.accidental == '#' && true ) {
-            
-                 ctx.beginPath();
-                 var sharp_y = y - line_height/3
-                 ctx.moveTo(acc_x - 2, sharp_y + sharp_horz_tilt)
-                 ctx.lineTo(acc_x + sharp_line_length, sharp_y - sharp_horz_tilt)
-   
-                 var sharp_y = y + line_height/3
+            if (note.accidental == '#' && true) {
 
-                 ctx.moveTo(acc_x - 2, sharp_y + sharp_horz_tilt)
-                 ctx.lineTo(acc_x + sharp_line_length, sharp_y - sharp_horz_tilt)
-  
-                 ctx.moveTo(acc_x + 2, y - (line_height/2) - 1 )
-                 ctx.lineTo(acc_x + 2, y + (line_height/2) + 1)
-   
-                 ctx.moveTo(acc_x + 6, y - (line_height/2) - 1 )
-                 ctx.lineTo(acc_x + 6, y + (line_height/2) + 1 )
-   
+                ctx.beginPath();
+                var sharp_y = y - line_height / 3
+                ctx.moveTo(acc_x - 2, sharp_y + sharp_horz_tilt)
+                ctx.lineTo(acc_x + sharp_line_length, sharp_y - sharp_horz_tilt)
 
-                 ctx.stroke();
-                 note_x += sharp_line_length * 2
+                var sharp_y = y + line_height / 3
+
+                ctx.moveTo(acc_x - 2, sharp_y + sharp_horz_tilt)
+                ctx.lineTo(acc_x + sharp_line_length, sharp_y - sharp_horz_tilt)
+
+                ctx.moveTo(acc_x + 2, y - (line_height / 2) - 1)
+                ctx.lineTo(acc_x + 2, y + (line_height / 2) + 1)
+
+                ctx.moveTo(acc_x + 6, y - (line_height / 2) - 1)
+                ctx.lineTo(acc_x + 6, y + (line_height / 2) + 1)
+
+
+                ctx.stroke();
+                note_x += sharp_line_length * 2
             }
-    
+
             // draw the note itself
             ctx.beginPath();
             ctx.ellipse(note_x, y, note_width, (line_height * 0.45), 0, 0, 2 * Math.PI); //, 2 * Math.PI);
@@ -346,7 +361,6 @@
 
                 }
             } else if (this_index <= C4_INDEX) {
-                console.log(offset_from_c, note)
 
                 y = first_low_ledger_line
                 draw_ledger_line(note_x, y)
@@ -362,6 +376,9 @@
                 }
             }
 
+            note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + note.freq
+            console.log(note)
+
             prev_note = note
         }
 
@@ -371,7 +388,7 @@
             ctx.lineTo(x + ledger_line_half_length, y)
             ctx.stroke()
         }
- 
+
         function draw_staff() {
 
             ctx.clearRect(0, 0, canvas_width, canvas_height)
@@ -619,27 +636,51 @@
 
 <body onload="on_load()">
 
-    <div><button onclick="start()">start</button><button onclick="stop()">stop</button></div>
-    <div id="note_el"></div>
+    <div>
+        <button id="start_button" onclick="toggle_start_stop()">Click to Start</button>
+        &nbsp;
+        <span id="note_el"></span>
+    </div>
+    <br>
 
-    <div>cents threshold (2 to 49) - bigger is more forgiving
-        <input id="cents_threshold_input" onchange="restart()" value="12"></input>
+    <div>Cents threshold (2 to 40) - bigger is more forgiving to out of tune notes
+        <input id="cents_threshold_input" onchange="restart()" value="12" type="number" min="2" max="40"></input>
+    </div>
+    <br>
+
+    <div>Steady factor (2 to 60) - bigger is maybe more accurate at pitch detection but slower to respond
+        <input id="steady_factor_input" onchange="restart()" value="30" type="number" min="2" max="60"></input>
+    </div>
+    <br>
+
+    <div>fftSize - 2048, 4096, 8192, 16384, 32768 - bigger is more accurate but slower to respond
+        <select id="fftsize_input" onchange="restart()">
+            <option value="2048">2048</option>
+            <option value="4096">4096</option>
+            <option value="8192">8192</option>
+            <option value="16384">16384</option>
+            <option value="32768">32768</option>
+        </select>
+    </div>
+    <br>
+
+    <div>Transpose octave - 0, 1, -1
+        <select id="transpose_octave_input" onchange="restart">
+            <option value="0">Don't transpose</option>
+            <option value="1">Up 1 octave</option>
+            <option value="2">Up 2 octaves</option>
+            <option value="-1">Down 1 octave</option>
+            <option value="-2">Down 2 octaves</option>
+        </select>
+    </div>
+    <br>
+
+    <div>
+        <span style="color: red;">Red = out of tune sharp.</span>
+        &nbsp;
+        <span style="color: blue;">Blue = out of tune flat.</span>
     </div>
 
-    <div>steady factor (2 to 60) - bigger is more accurate but laggier
-        <input id="steady_factor_input" onchange="restart()" value="30"></input>
-    </div>
-
-    <div>fftSize - 2048, 4096, 8192, 16384, 32768 - bigger is more accurate but laggier
-        <input id="fftsize_input" onchange="restart()" value="2048"></input>
-    </div>
-
-    <div>transpose octave - 0, 1, -1
-        <input id="transpose_octave_input" onchange="restart()" value="0"></input>
-    </div>
-
-    <div style="color: red;">Red == out of tune sharp</div>
-    <div style="color: blue;">Blue == out of tune flat</div>
     <div><canvas id="canvas_el" width=800 height=400></canvas></div>
 
 </body>
