@@ -14,7 +14,7 @@
 
         body {
             font-family: verdana, arial;
-            font-size: 16px;
+            font-size: 14px;
             margin: 20px;
         }
 
@@ -376,9 +376,9 @@
                 }
             }
 
-            note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + note.freq
             console.log(note)
-
+            note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + parseFloat(note.freq).toFixed(2)
+        
             prev_note = note
         }
 
@@ -604,6 +604,8 @@
 
             var letter = note_letters[A4_INDEX + r_index];
 
+            console.log(input)
+
             return {
                 letter: letter,
                 cents: side * cent_index,
@@ -638,8 +640,6 @@
 
     <div>
         <button id="start_button" onclick="toggle_start_stop()">Click to Start</button>
-        &nbsp;
-        <span id="note_el"></span>
     </div>
     <br>
 
@@ -679,6 +679,9 @@
         <span style="color: red;">Red = out of tune sharp.</span>
         &nbsp;
         <span style="color: blue;">Blue = out of tune flat.</span>
+        &nbsp;
+        <span id="note_el"></span>
+ 
     </div>
 
     <div><canvas id="canvas_el" width=800 height=400></canvas></div>
