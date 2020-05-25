@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Corey's Pitch Dectection</title>
+
+    <style>
+        #canvas_el {
+            background-color: lightgoldenrodyellow;
+            border: 1px solid gray;
+        }
+
+        body {
+            font-family: verdana, arial;
+            font-size: 16px;
+            margin: 20px;
+        }
+
+        button {
+            font-size: 16px;
+        }
+    </style>
+
+    <script type="text/javascript">
+        var audioCtx
+        var analyser
+        var media_stream_source
+
+        var user_media_constraints = {
+            audio: true,
+            video: false
+        };
+
+        var fft_array
+
+        var running = false
+        var ready = false
+        var first_time = true
+
+        var queue = []
+        var note_el
+        var cents_threshold_input
+        var steady_factor_input
+        var fftsize_input
+        var canvas_el
+
+        var number_of_staffs = 4
+        var prev_note = {letter: "", cents: 0, freq: 0}
+        var cents_threshold
+        var queue_length
+        var fftSize // 2048, 4096, 8192, 16384, 32768
+
+        // get_freq_via_yin constants
+        const yin_threshold = 0.1
+        const yin_probabilityThreshold = 0.1
+
+        // canvas
+        var ctx
+
+
+        function on_load() {
+
+            note_el = document.getElementById("note_el")
+            cents_threshold_input = document.getElementById("cents_threshold_input")
+            steady_factor_input = document.getElementById("steady_factor_input")
+            fftsize_input = document.getElementById("fftsize_input")
+            transpose_octave_input = document.getElementById("transpose_octave_input")
+
+            canvas_el = document.getElementById("canvas_el")
+            ctx = canvas_el.getContext("2d");
+
+            draw_staff()
+
+            //test, initial display
+            set_config()
+            var f = 440
+            for (var i = 0; i < 55; i++) {
+                draw_note(frequency_to_note(f))
+                f *= 1.02
+            }
+
+            f = 440
+            for (var i = 0; i < 25; i++) {
+                draw_note(frequency_to_note(f))
+                f *= .97
+            }
+
+        }
+
+        function init() {
+
+            navigator.mediaDevices.getUserMedia(user_media_constraints)
+                .then(function (stream) {
+                    media_stream_source = audioCtx.createMediaStreamSource(stream);
+                    media_stream_source.connect(analyser);
+                    ready = true
+                    console.log("ready")
+                })
+                .catch(function (err) {
+                    console.log(err)
+                })
+        }
+
+        function set_config() {
+            // init the queue
+            queue = []
+            queue_length = steady_factor_input.value
+            for (var i = 0; i < queue_length; i++) {
+                queue.push(0)
+            }
+
+            cents_threshold = cents_threshold_input.value
+
+        }
+
+        function restart() {
+            stop()
+
+            start()
+        }
+
+        function start() {
+
+            set_config()
+
+            if (first_time) {
+                audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                first_time = false
+                init()
+            }
+
+            analyser.fftSize = fftsize_input.value
+            fft_array = new Float32Array(analyser.fftSize)
+
+            note_el.innerText = ""
+            running = true
+            draw_staff()
+
+            requestAnimationFrame(frame_callback)
+        }
+
+        function stop() {
+            running = false
+        }
+
+        function frame_callback() {
+
+            if (!running) return;
+
+            if (!ready) {
+                requestAnimationFrame(frame_callback)
+                return
+            }
+
+
+
+            //get_loudest_freq()
+            analyser.getFloatTimeDomainData(fft_array);
+
+            let freq = (get_freq_via_yin(fft_array, yin_threshold, yin_probabilityThreshold))
+
+            // the freq is a float and jumps around a lot, so lets do a couple
+            // things to steady it.  Rounds 123.4567 to 123.46, and take the most
+            // frequently occuring value of the last N readings
+
+            if (freq > 3000) {
+                freq = 0
+            }
+
+            if (freq) {
+
+                // For steadier pitch detection, save the last N frequencies and then pick the most common of the last N
+                queue.shift()
+                queue.push(freq.toFixed(1))
+
+                let most_common_recent_frequency = get_mode(queue)
+
+                let note = frequency_to_note(most_common_recent_frequency)
+                if (note) {
+                    note_el.innerText = JSON.stringify(note)
+                    draw_note(note)
+                }
+
+            }
+
+            //draw(notes)
+            requestAnimationFrame(frame_callback)
+        }
+
+        const canvas_width = 800
+        const canvas_height = 400
+        var staff_number = 1
+        
+        const line_height = 8
+        const staff_spacing = 40
+        const note_spacing = 34 
+
+        const ledger_line_half_length = 10
+
+
+        const letter_array = ["C", "D", "E", "F", "G", "A", "B"]
+
+        var current_x = 0
+        const sharp_line_length = 10
+         
+
+        function draw_note(note) {
+
+            if (!note) return
+
+            if (note.freq == prev_note.freq) {
+                return
+            }
+
+            // if it's the same note, we'll just redraw with a different color
+            // so don't advance x, but if it is a different note, then advance
+            if (note.letter != prev_note.letter) {
+                current_x += note_spacing
+                if (prev_note.accidental == '#') {
+                   current_x += sharp_line_length * 2
+                }
+            }
+
+            // are we at the end of this staff?
+            if (current_x > (canvas_width - (2 * note_spacing))) {
+                staff_number++
+                if (staff_number > number_of_staffs) {
+                    draw_staff()
+                }
+                current_x = note_spacing
+            }
+
+            // enhance the note object
+            note.just_letter = note.letter.charAt(0)
+
+            if (note.letter.length == 2) {
+                // like A4
+                note.accidental = ""
+                note.octave = parseInt(note.letter.charAt(1))
+            } else {
+                // like A#4
+                note.accidental = note.letter.charAt(1)
+                note.octave = parseInt(note.letter.charAt(2))
+            }
+
+            var transposed_octave = note.octave += parseInt(transpose_octave_input.value)
+
+            var offset_from_c = letter_array.indexOf(note.just_letter)
+            var offset_from_octave_4 = transposed_octave - 4
+
+            var y = .5
+
+            y += line_height / 2 // because the ellipse x y is the center
+            y += staff_number * staff_spacing
+            y += staff_number * (5.5 * line_height)
+
+            y -= (staff_number - 1) * (line_height / 2) // this fixes an error, but I'm not sure why
+
+            var first_low_ledger_line = y
+            var first_high_ledger_line = y - (6 * line_height)
+
+            // top_line_of_staff_y -= 1 * (3.5 * line_height) // first ledger line
+            // top_line_of_staff_y -= 5 * (line_height / 2)  // a is 5 offset from c
+
+            y -= offset_from_octave_4 * (3.5 * line_height)
+            y -= offset_from_c * (line_height / 2)
+
+    
+            if (note.cents > cents_threshold) {
+                ctx.fillStyle = "red"
+            } else if (Math.abs(note.cents) > cents_threshold) {
+                ctx.fillStyle = "blue"
+            } else {
+                ctx.fillStyle = "black"
+            }
+
+            // // draw the accidental
+            const sharp_horz_tilt = 2
+            var nudge = line_height / 3
+
+            var note_x = current_x
+            var acc_x = current_x - 3
+            var note_width = line_height * 0.8
+
+            if (note.accidental == '#' && true ) {
+            
+                 ctx.beginPath();
+                 var sharp_y = y - line_height/3
+                 ctx.moveTo(acc_x - 2, sharp_y + sharp_horz_tilt)
+                 ctx.lineTo(acc_x + sharp_line_length, sharp_y - sharp_horz_tilt)
+   
+                 var sharp_y = y + line_height/3
+
+                 ctx.moveTo(acc_x - 2, sharp_y + sharp_horz_tilt)
+                 ctx.lineTo(acc_x + sharp_line_length, sharp_y - sharp_horz_tilt)
+  
+                 ctx.moveTo(acc_x + 2, y - (line_height/2) - 1 )
+                 ctx.lineTo(acc_x + 2, y + (line_height/2) + 1)
+   
+                 ctx.moveTo(acc_x + 6, y - (line_height/2) - 1 )
+                 ctx.lineTo(acc_x + 6, y + (line_height/2) + 1 )
+   
+
+                 ctx.stroke();
+                 note_x += sharp_line_length * 2
+            }
+    
+            // draw the note itself
+            ctx.beginPath();
+            ctx.ellipse(note_x, y, note_width, (line_height * 0.45), 0, 0, 2 * Math.PI); //, 2 * Math.PI);
+            ctx.fill();
+
+            // ledger lines
+
+            const A5_INDEX = note_letters.indexOf("A5")
+            const C6_INDEX = note_letters.indexOf("C6")
+            const E6_INDEX = note_letters.indexOf("E6")
+            const G6_INDEX = note_letters.indexOf("G6")
+
+            const C4_INDEX = note_letters.indexOf("C#4")
+            const A3_INDEX = note_letters.indexOf("A#3")
+            const F_INDEX = note_letters.indexOf("F3")
+
+            var this_index = note_letters.indexOf(note.letter)
+
+            if (this_index >= A5_INDEX) {
+                y = first_high_ledger_line
+                draw_ledger_line(note_x, y)
+
+                if (this_index >= C6_INDEX) {
+                    y -= line_height
+                    draw_ledger_line(note_x, y)
+
+                    if (this_index >= E6_INDEX) {
+                        y -= line_height
+                        draw_ledger_line(note_x, y)
+
+                        if (this_index >= G6_INDEX) {
+                            y -= line_height
+                            draw_ledger_line(note_x, y)
+                        }
+                    }
+
+                }
+            } else if (this_index <= C4_INDEX) {
+                console.log(offset_from_c, note)
+
+                y = first_low_ledger_line
+                draw_ledger_line(note_x, y)
+
+                if (this_index <= A3_INDEX) {
+                    y += line_height
+                    draw_ledger_line(note_x, y)
+
+                    if (this_index <= F_INDEX) {
+                        y += line_height
+                        draw_ledger_line(note_x, y)
+                    }
+                }
+            }
+
+            prev_note = note
+        }
+
+        function draw_ledger_line(x, y) {
+            ctx.beginPath()
+            ctx.moveTo(x - ledger_line_half_length, y)
+            ctx.lineTo(x + ledger_line_half_length, y)
+            ctx.stroke()
+        }
+ 
+        function draw_staff() {
+
+            ctx.clearRect(0, 0, canvas_width, canvas_height)
+            ctx.lineWidth = 1
+            var y = .5 // for crisp lines https://usefulangle.com/post/17/html5-canvas-drawing-1px-crisp-straight-lines
+            //ctx.strokeStyle = "#FF0000";
+
+            for (var row = 1; row < number_of_staffs + 1; row++) {
+                y += staff_spacing
+                for (var line = 0; line < 5; line++) {
+                    y += line_height
+                    ctx.beginPath()
+                    ctx.moveTo(0, y)
+                    ctx.lineTo(canvas_width, y)
+                    ctx.stroke()
+                }
+            }
+
+            staff_number = 1
+            current_x = 0
+        }
+
+
+        // from https://github.com/peterkhayes/pitchfinder/blob/master/src/detectors/yin.ts
+        function get_freq_via_yin(fft_array, threshold, probabilityThreshold) {
+
+            // Set buffer size to the highest power of two below the provided buffer's length.
+            let bufferSize;
+            for (bufferSize = 1; bufferSize < fft_array.length; bufferSize *= 2);
+            bufferSize /= 2;
+
+            // Set up the yinBuffer as described in step one of the YIN paper.
+            const yinBufferLength = bufferSize / 2;
+            const yinBuffer = new Float32Array(yinBufferLength);
+
+            let probability = 0,
+                tau;
+
+            // Compute the difference function as described in step 2 of the YIN paper.
+            for (let t = 0; t < yinBufferLength; t++) {
+                yinBuffer[t] = 0;
+            }
+            for (let t = 1; t < yinBufferLength; t++) {
+                for (let i = 0; i < yinBufferLength; i++) {
+                    const delta = fft_array[i] - fft_array[i + t];
+                    yinBuffer[t] += delta * delta;
+                }
+            }
+
+            // Compute the cumulative mean normalized difference as described in step 3 of the paper.
+            yinBuffer[0] = 1;
+            yinBuffer[1] = 1;
+            let runningSum = 0;
+            for (let t = 1; t < yinBufferLength; t++) {
+                runningSum += yinBuffer[t];
+                yinBuffer[t] *= t / runningSum;
+            }
+
+            // Compute the absolute threshold as described in step 4 of the paper.
+            // Since the first two positions in the array are 1,
+            // we can start at the third position.
+            for (tau = 2; tau < yinBufferLength; tau++) {
+                if (yinBuffer[tau] < threshold) {
+                    while (tau + 1 < yinBufferLength && yinBuffer[tau + 1] < yinBuffer[tau]) {
+                        tau++;
+                    }
+                    // found tau, exit loop and return
+                    // store the probability
+                    // From the YIN paper: The threshold determines the list of
+                    // candidates admitted to the set, and can be interpreted as the
+                    // proportion of aperiodic power tolerated
+                    // within a periodic signal.
+                    //
+                    // Since we want the periodicity and and not aperiodicity:
+                    // periodicity = 1 - aperiodicity
+                    probability = 1 - yinBuffer[tau];
+                    break;
+                }
+            }
+
+            // if no pitch found, return null.
+            if (tau === yinBufferLength || yinBuffer[tau] >= threshold) {
+                return null;
+            }
+
+            // If probability too low, return -1.
+            if (probability < probabilityThreshold) {
+                return null;
+            }
+
+            /**
+             * Implements step 5 of the AUBIO_YIN paper. It refines the estimated tau
+             * value using parabolic interpolation. This is needed to detect higher
+             * frequencies more precisely. See http://fizyka.umk.pl/nrbook/c10-2.pdf and
+             * for more background
+             * http://fedc.wiwi.hu-berlin.de/xplore/tutorials/xegbohtmlnode62.html
+             */
+            let betterTau, x0, x2;
+            if (tau < 1) {
+                x0 = tau;
+            } else {
+                x0 = tau - 1;
+            }
+            if (tau + 1 < yinBufferLength) {
+                x2 = tau + 1;
+            } else {
+                x2 = tau;
+            }
+            if (x0 === tau) {
+                if (yinBuffer[tau] <= yinBuffer[x2]) {
+                    betterTau = tau;
+                } else {
+                    betterTau = x2;
+                }
+            } else if (x2 === tau) {
+                if (yinBuffer[tau] <= yinBuffer[x0]) {
+                    betterTau = tau;
+                } else {
+                    betterTau = x0;
+                }
+            } else {
+                const s0 = yinBuffer[x0];
+                const s1 = yinBuffer[tau];
+                const s2 = yinBuffer[x2];
+                // fixed AUBIO implementation, thanks to Karl Helgason:
+                // (2.0f * s1 - s2 - s0) was incorrectly multiplied with -1
+                betterTau = tau + (s2 - s0) / (2 * (2 * s1 - s2 - s0));
+            }
+
+            // return frequency
+            return audioCtx.sampleRate / betterTau;
+        }
+
+        // frequency to note constants 
+        const A4 = 440.0;
+        const A4_INDEX = 57;
+
+        const note_letters = [
+            "C0", "C#0", "D0", "D#0", "E0", "F0", "F#0", "G0", "G#0", "A0", "A#0", "B0",
+            "C1", "C#1", "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1",
+            "C2", "C#2", "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A2", "A#2", "B2",
+            "C3", "C#3", "D3", "D#3", "E3", "F3", "F#3", "G3", "G#3", "A3", "A#3", "B3",
+            "C4", "C#4", "D4", "D#4", "E4", "F4", "F#4", "G4", "G#4", "A4", "A#4", "B4",
+            "C5", "C#5", "D5", "D#5", "E5", "F5", "F#5", "G5", "G#5", "A5", "A#5", "B5",
+            "C6", "C#6", "D6", "D#6", "E6", "F6", "F#6", "G6", "G#6", "A6", "A#6", "B6",
+            "C7", "C#7", "D7", "D#7", "E7", "F7", "F#7", "G7", "G#7", "A7", "A#7", "B7",
+            "C8", "C#8", "D8", "D#8", "E8", "F8", "F#8", "G8", "G#8", "A8", "A#8", "B8",
+            "C9", "C#9", "D9", "D#9", "E9", "F9", "F#9", "G9", "G#9", "A9", "A#9", "B9"
+        ];
+
+        const MINUS = -1;
+        const PLUS = 1;
+        const r = Math.pow(2.0, 1.0 / 12.0);
+        const cent = Math.pow(2.0, 1.0 / 1200.0);
+
+        // Corey says...from https://newt.phys.unsw.edu.au/music/note/, then I tweaked it
+        function frequency_to_note(input) {
+            //  if ((input < 27.5) || (input > 14080))
+            // low end, guitar E string, high end violin high b on e string
+            // We want to filter out more extreme notes which tend to be noise
+            if ((input < 160) || (input > 2000))
+                return null
+
+            var frequency;
+            var r_index = 0;
+            var cent_index = 0;
+            var side;
+
+            frequency = A4;
+
+            if (input >= frequency) {
+                while (input >= r * frequency) {
+                    frequency = r * frequency;
+                    r_index++;
+                }
+                while (input > cent * frequency) {
+                    frequency = cent * frequency;
+                    cent_index++;
+                }
+                if ((cent * frequency - input) < (input - frequency))
+                    cent_index++;
+                if (cent_index > 50) {
+                    r_index++;
+                    cent_index = 100 - cent_index;
+                    if (cent_index != 0)
+                        side = MINUS;
+                    else
+                        side = PLUS;
+                } else
+                    side = PLUS;
+            } else {
+                while (input <= frequency / r) {
+                    frequency = frequency / r;
+                    r_index--;
+                }
+                while (input < frequency / cent) {
+                    frequency = frequency / cent;
+                    cent_index++;
+                }
+                if ((input - frequency / cent) < (frequency - input))
+                    cent_index++;
+                if (cent_index >= 50) {
+                    r_index--;
+                    cent_index = 100 - cent_index;
+                    side = PLUS;
+                } else {
+                    if (cent_index != 0)
+                        side = MINUS;
+                    else
+                        side = PLUS;
+                }
+            }
+
+            var letter = note_letters[A4_INDEX + r_index];
+
+            return {
+                letter: letter,
+                cents: side * cent_index,
+                freq: input,
+            }
+        }
+
+        // get most frequencly occuring value in an array, aka, the mode. from stackoverflow 
+        function get_mode(array) {
+            if (array.length == 0)
+                return null;
+            var modeMap = {};
+            var maxEl = array[0],
+                maxCount = 1;
+            for (var i = 0; i < array.length; i++) {
+                var el = array[i];
+                if (modeMap[el] == null)
+                    modeMap[el] = 1;
+                else
+                    modeMap[el]++;
+                if (modeMap[el] > maxCount) {
+                    maxEl = el;
+                    maxCount = modeMap[el];
+                }
+            }
+            return maxEl;
+        }
+    </script>
+</head>
+
+<body onload="on_load()">
+
+    <div><button onclick="start()">start</button><button onclick="stop()">stop</button></div>
+    <div id="note_el"></div>
+
+    <div>cents threshold (2 to 49) - bigger is more forgiving
+        <input id="cents_threshold_input" onchange="restart()" value="12"></input>
+    </div>
+
+    <div>steady factor (2 to 60) - bigger is more accurate but laggier
+        <input id="steady_factor_input" onchange="restart()" value="30"></input>
+    </div>
+
+    <div>fftSize - 2048, 4096, 8192, 16384, 32768 - bigger is more accurate but laggier
+        <input id="fftsize_input" onchange="restart()" value="2048"></input>
+    </div>
+
+    <div>transpose octave - 0, 1, -1
+        <input id="transpose_octave_input" onchange="restart()" value="0"></input>
+    </div>
+
+    <div style="color: red;">Red == out of tune sharp</div>
+    <div style="color: blue;">Blue == out of tune flat</div>
+    <div><canvas id="canvas_el" width=800 height=400></canvas></div>
+
+</body>
+
+</html>
