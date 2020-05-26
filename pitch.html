@@ -639,21 +639,21 @@
 <body onload="on_load()">
 
     <div>
-        <button id="start_button" onclick="toggle_start_stop()">Click to Start</button>
+        <button id="start_button" onclick="toggle_start_stop()">Click to Start then play or sing something!</button>
     </div>
     <br>
 
-    <div>Cents threshold (2 to 40) - bigger is more forgiving to out of tune notes
+    <div>Pitch forgiveness - Smaller is less forgiving to out of tune notes. This is a "cents" threshold (2 to 40):
         <input id="cents_threshold_input" onchange="restart()" value="12" type="number" min="2" max="40"></input>
     </div>
     <br>
 
-    <div>Steady factor (2 to 60) - bigger is maybe more accurate at pitch detection but slower to respond
+    <div>Steady factor - Bigger is maybe more accurate at pitch detection but slower to respond (2 to 60):
         <input id="steady_factor_input" onchange="restart()" value="30" type="number" min="2" max="60"></input>
     </div>
     <br>
 
-    <div>fftSize - 2048, 4096, 8192, 16384, 32768 - bigger is more accurate but slower to respond
+    <div>fftSize - Bigger is more accurate but slower to respond. Fast Fourier Transform window size:
         <select id="fftsize_input" onchange="restart()">
             <option value="2048">2048</option>
             <option value="4096">4096</option>
@@ -664,7 +664,7 @@
     </div>
     <br>
 
-    <div>Transpose octave - 0, 1, -1
+    <div>Transpose octave:
         <select id="transpose_octave_input" onchange="restart">
             <option value="0">Don't transpose</option>
             <option value="1">Up 1 octave</option>
