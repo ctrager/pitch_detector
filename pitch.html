@@ -116,41 +116,80 @@
             cents_threshold = cents_threshold_input.value
         }
 
+
+        var note_letters
+
+
         function set_sharps_or_flats(val) {
             sharps_or_flats = val
-            high_ledger_line_indexes = []
-            low_ledger_line_indexes = []
-            if (sharps_or_flats == "sharps") {
-                note_letters = sharp_note_letters
-                high_ledger_line_indexes.push(note_letters.indexOf("A5"))
-                high_ledger_line_indexes.push(note_letters.indexOf("C6"))
-                high_ledger_line_indexes.push(note_letters.indexOf("E6"))
-                high_ledger_line_indexes.push(note_letters.indexOf("G6"))
-                low_ledger_line_indexes.push(note_letters.indexOf("C#4"))
-                low_ledger_line_indexes.push(note_letters.indexOf("A#3"))
-                low_ledger_line_indexes.push(note_letters.indexOf("F#3"))
-            } else {
-                note_letters = flat_note_letters
-                high_ledger_line_indexes.push(note_letters.indexOf("Af5"))
-                high_ledger_line_indexes.push(note_letters.indexOf("C6"))
-                high_ledger_line_indexes.push(note_letters.indexOf("Ef6"))
-                high_ledger_line_indexes.push(note_letters.indexOf("G6"))
-                low_ledger_line_indexes.push(note_letters.indexOf("C4"))
-                low_ledger_line_indexes.push(note_letters.indexOf("A3"))
-                low_ledger_line_indexes.push(note_letters.indexOf("F3"))
-            }
 
+            if (sharps_or_flats == "sharps") {
+              note_letters = sharp_note_letters
+            } 
+            else {
+                note_letters = flat_note_letters   
+            }
+   
+            calc_ledger_line_boundaries()
+            //draw_test()
         }
+
         var offset_to_middle_c
+
         function set_clef(val) {
             clef = val
             if (clef == "treble") {
                 offset_to_middle_c = line_height // 2 half steps down from bottom line to middle c
-            }
-            else if (clef == "alto") {
+            } else if (clef == "alto") {
                 offset_to_middle_c = -2 * line_height // four half steps up from bottom line to middle c
             }
-            draw_test()
+            calc_ledger_line_boundaries()
+            //draw_test()
+        }
+
+        function calc_ledger_line_boundaries() {
+            high_ledger_line_indexes = []
+            low_ledger_line_indexes = []
+            if (clef == "treble") {
+                if (sharps_or_flats == "sharps") {
+                    high_ledger_line_indexes.push(note_letters.indexOf("A5"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("C6"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("E6"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("G6"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("C#4"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("A#3"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("F#3"))
+                } else {
+                    note_letters = flat_note_letters
+                    high_ledger_line_indexes.push(note_letters.indexOf("Af5"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("C6"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("Ef6"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("G6"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("C4"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("A3"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("F3"))
+                }
+            } else if (clef == "alto") {
+                if (sharps_or_flats == "sharps") {
+                    note_letters = sharp_note_letters
+                    high_ledger_line_indexes.push(note_letters.indexOf("B4"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("D5"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("F5"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("A5"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("D#3"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("B#2"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("G#2"))
+                } else {
+                    note_letters = flat_note_letters
+                    high_ledger_line_indexes.push(note_letters.indexOf("Bf4"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("Df5"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("E5"))
+                    high_ledger_line_indexes.push(note_letters.indexOf("Af5"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("D2"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("B2"))
+                    low_ledger_line_indexes.push(note_letters.indexOf("G2"))
+                }
+            }
         }
 
         function draw_test() {
@@ -251,7 +290,7 @@
         const note_spacing = 30
         const sharp_line_length = 10
         const ledger_line_half_length = 10
-
+        const letter_array = ["C", "D", "E", "F", "G", "A", "B"]
         var staff_number = 1
         var current_x = 0
 
@@ -276,6 +315,7 @@
                 note.octave = parseInt(note.letter.charAt(2))
             }
 
+            // Transpose the octave.
             // A#4 can become A#3 or A#5, etc
             note.octave = note.octave += parseInt(transpose_octave_input.value)
             note.letter = note.just_letter + note.accidental + note.octave
@@ -312,14 +352,14 @@
             var first_low_ledger_line = y + line_height
             var first_high_ledger_line = y - (5 * line_height)
 
-            // move to middle c 
+            // move to middle c, depends on which clef
             y += offset_to_middle_c
 
-            var letter_array = ["C", "D", "E", "F", "G", "A", "B"]
             var offset_from_middle_c = letter_array.indexOf(note.just_letter)
+            // adjust y per the note
             y -= offset_from_middle_c * (line_height / 2)
 
-            // transpose octave
+            // adjust y per the octave
             var offset_from_octave_4 = note.octave - 4
             y -= offset_from_octave_4 * (3.5 * line_height)
 
