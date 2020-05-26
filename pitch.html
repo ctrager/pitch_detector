@@ -198,7 +198,7 @@
         const canvas_height = 420
         const line_height = 8
         const staff_spacing = 50
-        const note_spacing = 34
+        const note_spacing = 30
         const sharp_line_length = 10
         const ledger_line_half_length = 10
         const letter_array = ["C", "D", "E", "F", "G", "A", "B"]
@@ -235,10 +235,11 @@
             // so don't increment x coordinate, but if it is a different note, then increment
             if (note.letter != prev_note.letter) {
 
-                current_x += note_spacing
+                current_x += note_spacing 
 
+                // the previous note took up more room, so move to the right more
                 if (prev_note.accidental == '#') {
-                    current_x += sharp_line_length * 2
+                    current_x += sharp_line_length * 2.5
                 }
 
                 // are we at the end of this staff?
@@ -251,6 +252,7 @@
                 }
             }
 
+            // too many magic numbers
             var offset_from_c = letter_array.indexOf(note.just_letter)
             var offset_from_octave_4 = note.octave - 4
 
@@ -260,7 +262,7 @@
             y += staff_number * staff_spacing
             y += staff_number * (5.5 * line_height)
 
-            y -= (staff_number - 1) * (line_height / 2) // this fixes an error, but I'm not sure why
+            y -= (staff_number - 1) * (line_height / 2) // this fixes an error, but I'm not sure why. my bad bookkeeping
 
             var first_low_ledger_line = y
             var first_high_ledger_line = y - (6 * line_height)
@@ -268,6 +270,7 @@
             y -= offset_from_octave_4 * (3.5 * line_height)
             y -= offset_from_c * (line_height / 2)
 
+            // color based on intonation
             if (note.cents > cents_threshold) {
                 ctx.fillStyle = "red"
                 ctx.strokeStyle = "red"
@@ -279,17 +282,16 @@
                 ctx.strokeStyle = "black"
             }
 
-            // // draw the accidental
+            // draw the accidental
+            // to do, make this more configurable, get rid of hard-coded numbers
             const sharp_horz_tilt = 2
-            var nudge = line_height / 3
-
+      
             var note_x = current_x
             var acc_x = current_x - 3
             var note_width = line_height * 0.8
 
             if (note.accidental == '#' && true) {
 
-                // to do, make this more configurable, get rid of hard-coded numbers
                 ctx.beginPath();
                 var sharp_y = y - 1
 
@@ -319,11 +321,12 @@
                 note_x,
                 y,
                 note_width,
-                (line_height * 0.45),
+                (line_height * 0.45), // don't completely fill the space between the lines
                 -.2, 0, // rotated
                 2 * Math.PI);
             ctx.fill();
 
+            // draw ledger lines
 
             // consts for drawing ledger lines
             const A5_INDEX = note_letters.indexOf("A5")
@@ -335,10 +338,8 @@
             const AS3_INDEX = note_letters.indexOf("A#3")
             const FS3_INDEX = note_letters.indexOf("F#3")
 
-
             var this_index = note_letters.indexOf(note.letter)
 
-            // draw ledger lines
             if (this_index >= A5_INDEX) {
                 y = first_high_ledger_line
                 draw_ledger_line(note_x, y)
@@ -373,7 +374,7 @@
                     }
                 }
             }
-  
+
             note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + parseFloat(note.freq).toFixed(2)
 
             prev_note = note
