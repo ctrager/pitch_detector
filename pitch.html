@@ -324,29 +324,21 @@
                 2 * Math.PI);
             ctx.fill();
 
-            draw_ledger_lines(note)
 
-            note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + parseFloat(note.freq).toFixed(2)
+            // consts for drawing ledger lines
+            const A5_INDEX = note_letters.indexOf("A5")
+            const C6_INDEX = note_letters.indexOf("C6")
+            const E6_INDEX = note_letters.indexOf("E6")
+            const G6_INDEX = note_letters.indexOf("G6")
 
-            prev_note = note
-        }
-
-        // consts for drwa ledger lines
-        const A5_INDEX = note_letters.indexOf("A5")
-        const C6_INDEX = note_letters.indexOf("C6")
-        const E6_INDEX = note_letters.indexOf("E6")
-        const G6_INDEX = note_letters.indexOf("G6")
-
-        const C4_INDEX = note_letters.indexOf("C#4")
-        const AS3_INDEX = note_letters.indexOf("A#3")
-        const FS3_INDEX = note_letters.indexOf("F#3")
-
-        function draw_ledger_lines(note) {
-            // ledger lines
+            const C4_INDEX = note_letters.indexOf("C#4")
+            const AS3_INDEX = note_letters.indexOf("A#3")
+            const FS3_INDEX = note_letters.indexOf("F#3")
 
 
             var this_index = note_letters.indexOf(note.letter)
 
+            // draw ledger lines
             if (this_index >= A5_INDEX) {
                 y = first_high_ledger_line
                 draw_ledger_line(note_x, y)
@@ -381,8 +373,10 @@
                     }
                 }
             }
+  
+            note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + parseFloat(note.freq).toFixed(2)
 
-
+            prev_note = note
         }
 
         function draw_ledger_line(x, y) {
