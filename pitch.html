@@ -24,22 +24,22 @@
     </style>
 
     <script type="text/javascript">
+        // web audio stuff
         var audioCtx
         var analyser
         var media_stream_source
+        var fft_array
 
         var user_media_constraints = {
             audio: true,
             video: false
         };
 
-        var fft_array
-
         var running = false
         var ready = false
         var first_time = true
 
-        var queue = []
+        // html elements
         var note_el
         var cents_threshold_input
         var steady_factor_input
@@ -47,15 +47,17 @@
         var canvas_el
         var start_button
 
-        var number_of_staffs = 4
         var prev_note = {
             letter: "",
             cents: 0,
             freq: 0
         }
+
+        // configurable stuff
+        var queue = []
         var cents_threshold
         var queue_length
-        var fftSize // 2048, 4096, 8192, 16384, 32768
+        var fftSize
 
         // get_freq_via_yin constants
         const yin_threshold = 0.1
@@ -95,7 +97,7 @@
 
         }
 
-        function init() {
+        function init_web_audio() {
 
             navigator.mediaDevices.getUserMedia(user_media_constraints)
                 .then(function (stream) {
@@ -118,7 +120,6 @@
             }
 
             cents_threshold = cents_threshold_input.value
-
         }
 
         function restart() {
@@ -138,7 +139,6 @@
             }
         }
 
-
         function start() {
 
             set_config()
@@ -147,7 +147,7 @@
                 audioCtx = new(window.AudioContext || window.webkitAudioContext)();
                 analyser = audioCtx.createAnalyser();
                 first_time = false
-                init()
+                init_web_audio()
             }
 
             analyser.fftSize = fftsize_input.value
@@ -169,20 +169,10 @@
                 return
             }
 
-
-
-            //get_loudest_freq()
+            // Get data representing the shape of the wave
             analyser.getFloatTimeDomainData(fft_array);
 
             let freq = (get_freq_via_yin(fft_array, yin_threshold, yin_probabilityThreshold))
-
-            // the freq is a float and jumps around a lot, so lets do a couple
-            // things to steady it.  Rounds 123.4567 to 123.46, and take the most
-            // frequently occuring value of the last N readings
-
-            if (freq > 3000) {
-                freq = 0
-            }
 
             if (freq) {
 
@@ -192,33 +182,29 @@
 
                 let most_common_recent_frequency = get_mode(queue)
 
+                // convert the frequency to the note, 440 to A4
                 let note = frequency_to_note(most_common_recent_frequency)
                 if (note) {
                     draw_note(note)
                 }
-
             }
 
-            //draw(notes)
+            // loop
             requestAnimationFrame(frame_callback)
         }
 
+        const number_of_staffs = 4
         const canvas_width = 700
         const canvas_height = 420
-        var staff_number = 1
-
         const line_height = 8
         const staff_spacing = 50
         const note_spacing = 34
-
+        const sharp_line_length = 10
         const ledger_line_half_length = 10
-
-
         const letter_array = ["C", "D", "E", "F", "G", "A", "B"]
 
+        var staff_number = 1
         var current_x = 0
-        const sharp_line_length = 10
-
 
         function draw_note(note) {
 
@@ -241,32 +227,34 @@
                 note.octave = parseInt(note.letter.charAt(2))
             }
 
-            // A#4 can becaome A#3 or A#5
+            // A#4 can become A#3 or A#5
             note.octave = note.octave += parseInt(transpose_octave_input.value)
             note.letter = note.just_letter + note.accidental + note.octave
 
             // if it's the same note, we'll just redraw with a different color
-            // so don't advance x, but if it is a different note, then advance
+            // so don't increment x coordinate, but if it is a different note, then increment
             if (note.letter != prev_note.letter) {
+
                 current_x += note_spacing
+
                 if (prev_note.accidental == '#') {
                     current_x += sharp_line_length * 2
                 }
-            }
 
-            // are we at the end of this staff?
-            if (current_x > (canvas_width - (2 * note_spacing))) {
-                staff_number++
-                if (staff_number > number_of_staffs) {
-                    draw_staff()
+                // are we at the end of this staff?
+                if (current_x > (canvas_width - (2 * note_spacing))) {
+                    staff_number++
+                    if (staff_number > number_of_staffs) {
+                        draw_staff()
+                    }
+                    current_x = note_spacing
                 }
-                current_x = note_spacing
             }
 
             var offset_from_c = letter_array.indexOf(note.just_letter)
             var offset_from_octave_4 = note.octave - 4
 
-            var y = .5
+            var y = .5 // half pixel for crisper lines, to match up with draw_staff()
 
             y += line_height / 2 // because the ellipse x y is the center
             y += staff_number * staff_spacing
@@ -280,13 +268,15 @@
             y -= offset_from_octave_4 * (3.5 * line_height)
             y -= offset_from_c * (line_height / 2)
 
-
             if (note.cents > cents_threshold) {
                 ctx.fillStyle = "red"
+                ctx.strokeStyle = "red"
             } else if (Math.abs(note.cents) > cents_threshold) {
                 ctx.fillStyle = "blue"
+                ctx.strokeStyle = "blue"
             } else {
                 ctx.fillStyle = "black"
+                ctx.strokeStyle = "black"
             }
 
             // // draw the accidental
@@ -299,42 +289,61 @@
 
             if (note.accidental == '#' && true) {
 
+                // to do, make this more configurable, get rid of hard-coded numbers
                 ctx.beginPath();
-                var sharp_y = y - line_height / 3
+                var sharp_y = y - 1
+
+                // horizontal lines, slight titled
                 ctx.moveTo(acc_x - 2, sharp_y + sharp_horz_tilt)
                 ctx.lineTo(acc_x + sharp_line_length, sharp_y - sharp_horz_tilt)
 
-                var sharp_y = y + line_height / 3
+                var sharp_y = y + line_height / 2
 
                 ctx.moveTo(acc_x - 2, sharp_y + sharp_horz_tilt)
                 ctx.lineTo(acc_x + sharp_line_length, sharp_y - sharp_horz_tilt)
 
+                // vertical lines, second one is a little higher
                 ctx.moveTo(acc_x + 2, y - (line_height / 2) - 1)
-                ctx.lineTo(acc_x + 2, y + (line_height / 2) + 1)
+                ctx.lineTo(acc_x + 2, y + (line_height / 2) + 3)
 
-                ctx.moveTo(acc_x + 6, y - (line_height / 2) - 1)
-                ctx.lineTo(acc_x + 6, y + (line_height / 2) + 1)
-
+                ctx.moveTo(acc_x + 6, y - (line_height / 2) - 2)
+                ctx.lineTo(acc_x + 6, y + (line_height / 2) + 2)
 
                 ctx.stroke();
                 note_x += sharp_line_length * 2
             }
 
-            // draw the note itself
+            // draw the note itself, an ellipse slightly rotated
             ctx.beginPath();
-            ctx.ellipse(note_x, y, note_width, (line_height * 0.45), 0, 0, 2 * Math.PI); //, 2 * Math.PI);
+            ctx.ellipse(
+                note_x,
+                y,
+                note_width,
+                (line_height * 0.45),
+                -.2, 0, // rotated
+                2 * Math.PI);
             ctx.fill();
 
+            draw_ledger_lines(note)
+
+            note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + parseFloat(note.freq).toFixed(2)
+
+            prev_note = note
+        }
+
+        // consts for drwa ledger lines
+        const A5_INDEX = note_letters.indexOf("A5")
+        const C6_INDEX = note_letters.indexOf("C6")
+        const E6_INDEX = note_letters.indexOf("E6")
+        const G6_INDEX = note_letters.indexOf("G6")
+
+        const C4_INDEX = note_letters.indexOf("C#4")
+        const AS3_INDEX = note_letters.indexOf("A#3")
+        const FS3_INDEX = note_letters.indexOf("F#3")
+
+        function draw_ledger_lines(note) {
             // ledger lines
 
-            const A5_INDEX = note_letters.indexOf("A5")
-            const C6_INDEX = note_letters.indexOf("C6")
-            const E6_INDEX = note_letters.indexOf("E6")
-            const G6_INDEX = note_letters.indexOf("G6")
-
-            const C4_INDEX = note_letters.indexOf("C#4")
-            const AS3_INDEX = note_letters.indexOf("A#3")
-            const FS3_INDEX = note_letters.indexOf("F#3")
 
             var this_index = note_letters.indexOf(note.letter)
 
@@ -373,10 +382,7 @@
                 }
             }
 
-            console.log(note)
-            note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + parseFloat(note.freq).toFixed(2)
-        
-            prev_note = note
+
         }
 
         function draw_ledger_line(x, y) {
@@ -390,8 +396,8 @@
 
             ctx.clearRect(0, 0, canvas_width, canvas_height)
             ctx.lineWidth = 1
+            ctx.strokeStyle = "black"
             var y = .5 // for crisp lines https://usefulangle.com/post/17/html5-canvas-drawing-1px-crisp-straight-lines
-            //ctx.strokeStyle = "#FF0000";
 
             for (var row = 1; row < number_of_staffs + 1; row++) {
                 y += staff_spacing
@@ -544,7 +550,7 @@
         // Corey says...from https://newt.phys.unsw.edu.au/music/note/, then I tweaked it
         function frequency_to_note(input) {
             //  if ((input < 27.5) || (input > 14080))
-            
+
             // Corey says...low end, guitar E string, high end violin high b on e string
             // We want to filter out more extreme notes which tend to be noise
             if ((input < 160) || (input > 2000))
@@ -601,8 +607,6 @@
             }
 
             var letter = note_letters[A4_INDEX + r_index];
-
-            console.log(input)
 
             return {
                 letter: letter,
@@ -679,12 +683,13 @@
         <span style="color: blue;">Blue = out of tune flat.</span>
         &nbsp;
         <span id="note_el"></span>
- 
+
     </div>
 
     <div><canvas id="canvas_el" width=700 height=420></canvas></div>
 
-    <div>by Corey Trager - <a href="https://github.com/ctrager/pitch_detector">https://github.com/ctrager/pitch_detector</a></div>
+    <div>by Corey Trager - <a
+            href="https://github.com/ctrager/pitch_detector">https://github.com/ctrager/pitch_detector</a></div>
 </body>
 
 </html>
