@@ -58,6 +58,9 @@
         var cents_threshold
         var queue_length
         var fftSize
+        var sharps_or_flats
+        var high_ledger_line_indexes
+        var low_ledger_line_indexes
 
         // get_freq_via_yin constants
         const yin_threshold = 0.1
@@ -79,22 +82,11 @@
             canvas_el = document.getElementById("canvas_el")
             ctx = canvas_el.getContext("2d");
 
+            set_sharps_or_flats("sharps")
+
             draw_staff()
 
-            //test, initial display
-            set_config()
-            var f = 440
-            for (var i = 0; i < 40; i++) {
-                draw_note(frequency_to_note(f))
-                f *= 1.04
-            }
-
-            f = 440
-            for (var i = 0; i < 40; i++) {
-                draw_note(frequency_to_note(f))
-                f *= .97
-            }
-
+            draw_test()
         }
 
         function init_web_audio() {
@@ -120,6 +112,50 @@
             }
 
             cents_threshold = cents_threshold_input.value
+        }
+
+        function set_sharps_or_flats(val) {
+            sharps_or_flats = val
+            high_ledger_line_indexes = []
+            low_ledger_line_indexes = []
+            if (sharps_or_flats == "sharps") {
+                note_letters = sharp_note_letters
+                high_ledger_line_indexes.push(note_letters.indexOf("A5"))
+                high_ledger_line_indexes.push(note_letters.indexOf("C6"))
+                high_ledger_line_indexes.push(note_letters.indexOf("E6"))
+                high_ledger_line_indexes.push(note_letters.indexOf("G6"))
+                low_ledger_line_indexes.push(note_letters.indexOf("C#4"))
+                low_ledger_line_indexes.push(note_letters.indexOf("A#3"))
+                low_ledger_line_indexes.push(note_letters.indexOf("F#3"))
+            } else {
+                note_letters = flat_note_letters
+                high_ledger_line_indexes.push(note_letters.indexOf("Af5"))
+                high_ledger_line_indexes.push(note_letters.indexOf("C6"))
+                high_ledger_line_indexes.push(note_letters.indexOf("Ef6"))
+                high_ledger_line_indexes.push(note_letters.indexOf("G6"))
+                low_ledger_line_indexes.push(note_letters.indexOf("C4"))
+                low_ledger_line_indexes.push(note_letters.indexOf("A3"))
+                low_ledger_line_indexes.push(note_letters.indexOf("F3"))
+            }
+
+            // draw_test()
+        }
+
+        function draw_test() {
+            // for testing
+            draw_staff()
+            set_config()
+            var f = 440
+            for (var i = 0; i < 40; i++) {
+                draw_note(frequency_to_note(f))
+                f *= 1.04
+            }
+
+            f = 440
+            for (var i = 0; i < 40; i++) {
+                draw_note(frequency_to_note(f))
+                f *= .97
+            }
         }
 
         function restart() {
@@ -214,8 +250,9 @@
                 return
             }
 
-            // enhance the note object
+            // enhance/alter the note object
             note.just_letter = note.letter.charAt(0)
+            var offset_from_c = letter_array.indexOf(note.just_letter)
 
             if (note.letter.length == 2) {
                 // like A4
@@ -227,18 +264,19 @@
                 note.octave = parseInt(note.letter.charAt(2))
             }
 
-            // A#4 can become A#3 or A#5
+            // A#4 can become A#3 or A#5, etc
             note.octave = note.octave += parseInt(transpose_octave_input.value)
             note.letter = note.just_letter + note.accidental + note.octave
 
-            // if it's the same note, we'll just redraw with a different color
+            // If it's the same note, we'll just redraw with a different color
             // so don't increment x coordinate, but if it is a different note, then increment
+
             if (note.letter != prev_note.letter) {
 
-                current_x += note_spacing 
+                current_x += note_spacing
 
                 // the previous note took up more room, so move to the right more
-                if (prev_note.accidental == '#') {
+                if (prev_note.accidental != "") {
                     current_x += sharp_line_length * 2.5
                 }
 
@@ -253,7 +291,6 @@
             }
 
             // too many magic numbers
-            var offset_from_c = letter_array.indexOf(note.just_letter)
             var offset_from_octave_4 = note.octave - 4
 
             var y = .5 // half pixel for crisper lines, to match up with draw_staff()
@@ -285,12 +322,12 @@
             // draw the accidental
             // to do, make this more configurable, get rid of hard-coded numbers
             const sharp_horz_tilt = 2
-      
+
             var note_x = current_x
             var acc_x = current_x - 3
             var note_width = line_height * 0.8
 
-            if (note.accidental == '#' && true) {
+            if (note.accidental == "#") {
 
                 ctx.beginPath();
                 var sharp_y = y - 1
@@ -313,64 +350,77 @@
 
                 ctx.stroke();
                 note_x += sharp_line_length * 2
+            } else {
+                if (note.accidental == "f") {
+                    ctx.beginPath();
+
+                    //vertical line
+                    ctx.moveTo(acc_x, y - (line_height))
+                    ctx.lineTo(acc_x, y + (line_height / 2))
+                    ctx.stroke();
+
+                    // a flat's half circle
+                    ctx.ellipse(
+                        acc_x + 3,
+                        y,
+                        4,
+                        line_height * 0.35, 
+                        -3.4, // rotation
+                        .3 * Math.PI, // start angle
+                        1.76 * Math.PI); // end angle
+                    ctx.stroke()
+
+                    note_x += sharp_line_length * 2
+
+                }
             }
 
             // draw the note itself, an ellipse slightly rotated
-            ctx.beginPath();
+            ctx.beginPath()
             ctx.ellipse(
                 note_x,
                 y,
                 note_width,
-                (line_height * 0.45), // don't completely fill the space between the lines
-                -.2, 0, // rotated
-                2 * Math.PI);
-            ctx.fill();
+                line_height * 0.45, // don't completely fill the space between the lines
+                -.2, // rotation
+                0, // start angle
+                2 * Math.PI) // end angle
+            ctx.fill()
 
             // draw ledger lines
-
-            // consts for drawing ledger lines
-            const A5_INDEX = note_letters.indexOf("A5")
-            const C6_INDEX = note_letters.indexOf("C6")
-            const E6_INDEX = note_letters.indexOf("E6")
-            const G6_INDEX = note_letters.indexOf("G6")
-
-            const C4_INDEX = note_letters.indexOf("C#4")
-            const AS3_INDEX = note_letters.indexOf("A#3")
-            const FS3_INDEX = note_letters.indexOf("F#3")
-
             var this_index = note_letters.indexOf(note.letter)
 
-            if (this_index >= A5_INDEX) {
+            if (this_index >= high_ledger_line_indexes[0]) {
                 y = first_high_ledger_line
                 draw_ledger_line(note_x, y)
 
-                if (this_index >= C6_INDEX) {
+                if (this_index >= high_ledger_line_indexes[1]) {
                     y -= line_height
                     draw_ledger_line(note_x, y)
 
-                    if (this_index >= E6_INDEX) {
+                    if (this_index >= high_ledger_line_indexes[2]) {
                         y -= line_height
                         draw_ledger_line(note_x, y)
 
-                        if (this_index >= G6_INDEX) {
+                        if (this_index >= high_ledger_line_indexes[3]) {
                             y -= line_height
                             draw_ledger_line(note_x, y)
                         }
                     }
-
                 }
-            } else if (this_index <= C4_INDEX) {
-
-                y = first_low_ledger_line
-                draw_ledger_line(note_x, y)
-
-                if (this_index <= AS3_INDEX) {
-                    y += line_height
+            } else {
+                if (this_index <= low_ledger_line_indexes[0]) {
+                    y = first_low_ledger_line
                     draw_ledger_line(note_x, y)
 
-                    if (this_index <= FS3_INDEX) {
+                    if (this_index <= low_ledger_line_indexes[1]) {
                         y += line_height
                         draw_ledger_line(note_x, y)
+
+                        if (this_index <= low_ledger_line_indexes[2]) {
+                            y += line_height
+                            draw_ledger_line(note_x, y)
+                        }
                     }
                 }
             }
@@ -524,7 +574,7 @@
         const A4 = 440.0;
         const A4_INDEX = 57;
 
-        const note_letters = [
+        const sharp_note_letters = [
             "C0", "C#0", "D0", "D#0", "E0", "F0", "F#0", "G0", "G#0", "A0", "A#0", "B0",
             "C1", "C#1", "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1",
             "C2", "C#2", "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A2", "A#2", "B2",
@@ -536,6 +586,20 @@
             "C8", "C#8", "D8", "D#8", "E8", "F8", "F#8", "G8", "G#8", "A8", "A#8", "B8",
             "C9", "C#9", "D9", "D#9", "E9", "F9", "F#9", "G9", "G#9", "A9", "A#9", "B9"
         ];
+
+        const flat_note_letters = [
+            "C0", "Df0", "D0", "Ef0", "E0", "F0", "Gf0", "G0", "Af0", "A0", "Bf0", "B0",
+            "C1", "Df1", "D1", "Ef1", "E1", "F1", "Gf1", "G1", "Af1", "A1", "Bf1", "B1",
+            "C2", "Df2", "D2", "Ef2", "E2", "F2", "Gf2", "G2", "Af2", "A2", "Bf2", "B2",
+            "C3", "Df3", "D3", "Ef3", "E3", "F3", "Gf3", "G3", "Af3", "A3", "Bf3", "B3",
+            "C4", "Df4", "D4", "Ef4", "E4", "F4", "Gf4", "G4", "Af4", "A4", "Bf4", "B4",
+            "C5", "Df5", "D5", "Ef5", "E5", "F5", "Gf5", "G5", "Af5", "A5", "Bf5", "B5",
+            "C6", "Df6", "D6", "Ef6", "E6", "F6", "Gf6", "G6", "Af6", "A6", "Bf6", "B6",
+            "C7", "Df7", "D7", "Ef7", "E7", "F7", "Gf7", "G7", "Af7", "A7", "Bf7", "B7",
+            "C8", "Df8", "D8", "Ef8", "E8", "F8", "Gf8", "G8", "Af8", "A8", "Bf8", "B8",
+            "C9", "Df9", "D9", "Ef9", "E9", "F9", "Gf9", "G9", "Af9", "A9", "Bf9", "B9"
+        ];
+
 
         const MINUS = -1;
         const PLUS = 1;
@@ -669,6 +733,11 @@
             <option value="-1">Down 1 octave</option>
             <option value="-2">Down 2 octaves</option>
         </select>
+        &nbsp;
+        <label><input type="radio" name="sharps_or_flats" value="sharps" onchange="set_sharps_or_flats(this.value)"
+                checked>sharps</input></label>
+        <label><input type="radio" name="sharps_or_flats" value="flats"
+                onchange="set_sharps_or_flats(this.value)">flats</input></label>
     </div>
     <br>
 
