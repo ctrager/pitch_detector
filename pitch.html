@@ -59,6 +59,7 @@
         var queue_length
         var fftSize
         var sharps_or_flats
+        var clef
         var high_ledger_line_indexes
         var low_ledger_line_indexes
 
@@ -83,6 +84,7 @@
             ctx = canvas_el.getContext("2d");
 
             set_sharps_or_flats("sharps")
+            set_clef("treble")
 
             draw_staff()
 
@@ -138,7 +140,17 @@
                 low_ledger_line_indexes.push(note_letters.indexOf("F3"))
             }
 
-            // draw_test()
+        }
+        var offset_to_middle_c
+        function set_clef(val) {
+            clef = val
+            if (clef == "treble") {
+                offset_to_middle_c = line_height // 2 half steps down from bottom line to middle c
+            }
+            else if (clef == "alto") {
+                offset_to_middle_c = -2 * line_height // four half steps up from bottom line to middle c
+            }
+            draw_test()
         }
 
         function draw_test() {
@@ -146,15 +158,17 @@
             draw_staff()
             set_config()
             var f = 440
-            for (var i = 0; i < 40; i++) {
-                draw_note(frequency_to_note(f))
-                f *= 1.04
-            }
-
-            f = 440
-            for (var i = 0; i < 40; i++) {
-                draw_note(frequency_to_note(f))
-                f *= .97
+            for (var j = 0; j < 3; j++) {
+                f = 440
+                for (var i = 0; i < 12; i++) {
+                    draw_note(frequency_to_note(f))
+                    f *= 1.10
+                }
+                f = 440
+                for (var i = 0; i < 12; i++) {
+                    draw_note(frequency_to_note(f))
+                    f *= .9
+                }
             }
         }
 
@@ -237,7 +251,6 @@
         const note_spacing = 30
         const sharp_line_length = 10
         const ledger_line_half_length = 10
-        const letter_array = ["C", "D", "E", "F", "G", "A", "B"]
 
         var staff_number = 1
         var current_x = 0
@@ -252,7 +265,6 @@
 
             // enhance/alter the note object
             note.just_letter = note.letter.charAt(0)
-            var offset_from_c = letter_array.indexOf(note.just_letter)
 
             if (note.letter.length == 2) {
                 // like A4
@@ -290,22 +302,26 @@
                 }
             }
 
-            // too many magic numbers
-            var offset_from_octave_4 = note.octave - 4
-
             var y = .5 // half pixel for crisper lines, to match up with draw_staff()
 
-            y += line_height / 2 // because the ellipse x y is the center
             y += staff_number * staff_spacing
-            y += staff_number * (5.5 * line_height)
+            y += staff_number * (5 * line_height)
 
-            y -= (staff_number - 1) * (line_height / 2) // this fixes an error, but I'm not sure why. my bad bookkeeping
+            // y is now the bottom line of the staff, or an E on the D string for violin
 
-            var first_low_ledger_line = y
-            var first_high_ledger_line = y - (6 * line_height)
+            var first_low_ledger_line = y + line_height
+            var first_high_ledger_line = y - (5 * line_height)
 
+            // move to middle c 
+            y += offset_to_middle_c
+
+            var letter_array = ["C", "D", "E", "F", "G", "A", "B"]
+            var offset_from_middle_c = letter_array.indexOf(note.just_letter)
+            y -= offset_from_middle_c * (line_height / 2)
+
+            // transpose octave
+            var offset_from_octave_4 = note.octave - 4
             y -= offset_from_octave_4 * (3.5 * line_height)
-            y -= offset_from_c * (line_height / 2)
 
             // color based on intonation
             if (note.cents > cents_threshold) {
@@ -328,6 +344,8 @@
             var note_width = line_height * 0.8
 
             if (note.accidental == "#") {
+
+                // draw the sharp symbol
 
                 ctx.beginPath();
                 var sharp_y = y - 1
@@ -352,6 +370,9 @@
                 note_x += sharp_line_length * 2
             } else {
                 if (note.accidental == "f") {
+
+                    // draw the flat symbol
+
                     ctx.beginPath();
 
                     //vertical line
@@ -364,7 +385,7 @@
                         acc_x + 3,
                         y,
                         4,
-                        line_height * 0.35, 
+                        line_height * 0.35,
                         -3.4, // rotation
                         .3 * Math.PI, // start angle
                         1.76 * Math.PI); // end angle
@@ -733,11 +754,21 @@
             <option value="-1">Down 1 octave</option>
             <option value="-2">Down 2 octaves</option>
         </select>
+
         &nbsp;
+        Accidentals:
+
         <label><input type="radio" name="sharps_or_flats" value="sharps" onchange="set_sharps_or_flats(this.value)"
                 checked>sharps</input></label>
         <label><input type="radio" name="sharps_or_flats" value="flats"
                 onchange="set_sharps_or_flats(this.value)">flats</input></label>
+
+
+        &nbsp;
+        Clef:
+        <label><input type="radio" name="clef" value="treble" onchange="set_clef(this.value)"
+                checked>treble</input></label>
+        <label><input type="radio" name="clef" value="alto" onchange="set_clef(this.value)">alto</input></label>
     </div>
     <br>
 
