@@ -3,8 +3,9 @@
 
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <title>Pitch Detector</title>
+    <link rel="icon" type="image/x-icon"
+        href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAB2UlEQVRYR8XXT4hOURjH8c9oZMMskSJMk2RhYWOnKMaKUJrtxAILoRRZEEoSZTOJhZUsrKwldmpqUqSkLPyXlBUz/vfoKN3uO/e+17ndU+/ivuee5/c9z79z7oD/H5+wGm+bmBposqiw5htW4XkTW7kAduJ2lwDXsK9LgJmUBy/7hcgVgkHcxWb86AciJ0DoXsbBLgFC+wgu1oXI5YEowRGEvZ/YjVt1IHIBrMQQjmMMn7Eej6sgcgB8RQC8SmIbcQMfsA4x33PkAIgSHP4HIMTW4AFO4UIXAKF5FIexFNGuS0dbHgix+XiDHbjTBUBo3sRDnGsbIJLwdYnIgZSg0RtaDcGK5O6iyCg24FibANNplxHv4tiUkvB6mwBfUhmWAezBfTxrGyByoOxKdhLxa7URhQciB94VVOalk/F8VwC78AhPuwI4hEuzicdcjk5YFoIlWIypnAALsBfbsQwhHNew+C+eizlQpf1nvq4HtuEKFvWwGrt9X0ux8FIdgHFcxZxZBBam879vhiqAqO8niJLqNV5gOX71rV4jBCdwusJwnPmV2d60E55N97xe6yMJt+B7k93XScK1mMTcEoE4YPanamiqX6sKtuJM+gL+iHuYSHe+xsJ/F/4G8jBjIfCBJUEAAAAASUVORK5CYII=" />
 
     <style>
         #canvas_el {
@@ -18,8 +19,14 @@
             margin: 20px;
         }
 
-        button {
+        #start_button {
             font-size: 16px;
+            background-color: lightgreen;
+        }
+
+        div {
+            margin-top: 8px;
+            margin-bottom: 8px;
         }
     </style>
 
@@ -124,12 +131,11 @@
             sharps_or_flats = val
 
             if (sharps_or_flats == "sharps") {
-              note_letters = sharp_note_letters
-            } 
-            else {
-                note_letters = flat_note_letters   
+                note_letters = sharp_note_letters
+            } else {
+                note_letters = flat_note_letters
             }
-   
+
             calc_ledger_line_boundaries()
             //draw_test()
         }
@@ -144,6 +150,7 @@
                 offset_to_middle_c = -2 * line_height // four half steps up from bottom line to middle c
             }
             calc_ledger_line_boundaries()
+            restart()
             //draw_test()
         }
 
@@ -222,8 +229,10 @@
             if (running) {
                 running = false
                 start_button.innerText = "Click to Start"
+                start_button.style.backgroundColor = "lightgreen"
             } else {
                 start_button.innerText = "Running. Click to Stop"
+                start_button.style.backgroundColor = "red"
                 start()
             }
         }
@@ -761,19 +770,54 @@
 <body onload="on_load()">
 
     <div>
-        <button id="start_button" onclick="toggle_start_stop()">Click to Start then play or sing something!</button>
+        <button id="start_button" onclick="toggle_start_stop()">Click to Start then play your instrument</button>
     </div>
-    <br>
-
-    <div>Pitch forgiveness - Smaller is less forgiving to out of tune notes. This is a "cents" threshold (2 to 40):
+    
+    <div>Sensitivity - Smaller is less forgiving to out of tune notes (2 to 40):
         <input id="cents_threshold_input" onchange="restart()" value="12" type="number" min="2" max="40"></input>
     </div>
-    <br>
 
-    <div>Steady factor - Bigger is maybe more accurate at pitch detection but slower to respond (2 to 60):
-        <input id="steady_factor_input" onchange="restart()" value="30" type="number" min="2" max="60"></input>
+    <div>
+        Accidentals:
+        <label><input type="radio" name="sharps_or_flats" value="sharps" onchange="set_sharps_or_flats(this.value)"
+                checked>sharps</input></label>
+        <label><input type="radio" name="sharps_or_flats" value="flats"
+                onchange="set_sharps_or_flats(this.value)">flats</input></label>
     </div>
-    <br>
+
+    <div>
+        Clef:
+        <label><input type="radio" name="clef" value="treble" onchange="set_clef(this.value)"
+                checked>treble</input></label>
+        <label><input type="radio" name="clef" value="alto" onchange="set_clef(this.value)">alto</input></label>
+
+        &nbsp;&nbsp;
+        Transpose octave:
+        <select id="transpose_octave_input" onchange="restart">
+            <option value="0">Don't transpose (violin, flute)</option>
+            <option value="1">Up 1 octave (viola, guitar)</option>
+            <option value="2">Up 2 octaves</option>
+            <option value="-1">Down 1 octave (whistling)</option>
+            <option value="-2">Down 2 octaves</option>
+        </select>
+    </div>
+
+    <div>
+        <span style="color: red;">Red = out of tune sharp.</span>
+        &nbsp;
+        <span style="color: blue;">Blue = out of tune flat.</span>
+        &nbsp;
+        <span id="note_el"></span>
+    </div>
+
+    <div><canvas id="canvas_el" width=700 height=420></canvas></div>
+
+    <div>Tweak the performance:</div>
+
+    <div>Steady factor - Bigger is maybe more accurate at pitch detection but slower to respond.
+        <br>The app takes the most frequently occuring pitch from the last N samples (3 to 60):
+        <input id="steady_factor_input" onchange="restart()" value="30" type="number" min="3" max="60"></input>
+    </div>
 
     <div>fftSize - Bigger is more accurate but slower to respond. Fast Fourier Transform window size:
         <select id="fftsize_input" onchange="restart()">
@@ -784,47 +828,12 @@
             <option value="32768">32768</option>
         </select>
     </div>
-    <br>
-
-    <div>Transpose octave:
-        <select id="transpose_octave_input" onchange="restart">
-            <option value="0">Don't transpose</option>
-            <option value="1">Up 1 octave</option>
-            <option value="2">Up 2 octaves</option>
-            <option value="-1">Down 1 octave</option>
-            <option value="-2">Down 2 octaves</option>
-        </select>
-
-        &nbsp;
-        Accidentals:
-
-        <label><input type="radio" name="sharps_or_flats" value="sharps" onchange="set_sharps_or_flats(this.value)"
-                checked>sharps</input></label>
-        <label><input type="radio" name="sharps_or_flats" value="flats"
-                onchange="set_sharps_or_flats(this.value)">flats</input></label>
-
-
-        &nbsp;
-        Clef:
-        <label><input type="radio" name="clef" value="treble" onchange="set_clef(this.value)"
-                checked>treble</input></label>
-        <label><input type="radio" name="clef" value="alto" onchange="set_clef(this.value)">alto</input></label>
-    </div>
-    <br>
 
     <div>
-        <span style="color: red;">Red = out of tune sharp.</span>
+        by <a href="https://ctrager.github.io">Corey Trager</a> - <a href="https://github.com/ctrager/pitch_detector">https://github.com/ctrager/pitch_detector</a>
         &nbsp;
-        <span style="color: blue;">Blue = out of tune flat.</span>
-        &nbsp;
-        <span id="note_el"></span>
-
+        <a href="https://ctrager.github.io/music_tools">More tools</a>
     </div>
 
-    <div><canvas id="canvas_el" width=700 height=420></canvas></div>
-
-    <div>by Corey Trager - <a
-            href="https://github.com/ctrager/pitch_detector">https://github.com/ctrager/pitch_detector</a></div>
 </body>
-
 </html>
