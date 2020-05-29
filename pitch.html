@@ -54,11 +54,7 @@
         var canvas_el
         var start_button
 
-        var prev_note = {
-            letter: "",
-            cents: 0,
-            freq: 0
-        }
+        var prev_note = {letter:"", accidental: ""}
 
         // configurable stuff
         var queue = []
@@ -231,7 +227,7 @@
                 start_button.innerText = "Click to Start"
                 start_button.style.backgroundColor = "lightgreen"
             } else {
-                start_button.innerText = "Running. Click to Stop"
+                start_button.innerText = "Running. Play your instrument. Click to Stop"
                 start_button.style.backgroundColor = "red"
                 start()
             }
@@ -301,7 +297,7 @@
         const ledger_line_half_length = 10
         const letter_array = ["C", "D", "E", "F", "G", "A", "B"]
         var staff_number = 1
-        var current_x = 0
+        var current_x
 
         function draw_note(note) {
 
@@ -333,7 +329,7 @@
             // so don't increment x coordinate, but if it is a different note, then increment
 
             if (note.letter != prev_note.letter) {
-
+                
                 current_x += note_spacing
 
                 // the previous note took up more room, so move to the right more
@@ -347,6 +343,8 @@
                     if (staff_number > number_of_staffs) {
                         draw_staff()
                     }
+
+                    // reset x to beginning of line
                     current_x = note_spacing
                 }
             }
@@ -522,11 +520,12 @@
                     ctx.moveTo(0, y)
                     ctx.lineTo(canvas_width, y)
                     ctx.stroke()
-                }
+                }draw_staff
             }
 
             staff_number = 1
             current_x = 0
+            prev_note = {letter:"", accidental: ""}
         }
 
 
@@ -770,7 +769,7 @@
 <body onload="on_load()">
 
     <div>
-        <button id="start_button" onclick="toggle_start_stop()">Click to Start then play your instrument</button>
+        <button id="start_button" onclick="toggle_start_stop()">Click to Start</button>
     </div>
     
     <div>Sensitivity - Smaller is less forgiving to out of tune notes (2 to 40):
