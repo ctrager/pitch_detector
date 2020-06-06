@@ -2,7 +2,8 @@
 <html>
 
 <head>
-    <meta name="Description" content="Pitch detector, to improve intonation (violin, viola, etc) written by Corey Trager in HTML and Javascript">
+    <meta name="Description"
+        content="Pitch detector, to improve intonation (violin, viola, etc) written by Corey Trager in HTML and Javascript">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Pitch Detector</title>
     <link rel="icon" type="image/x-icon"
@@ -38,11 +39,6 @@
         var media_stream_source
         var fft_array
 
-        var user_media_constraints = {
-            audio: true,
-            video: false
-        };
-
         var running = false
         var ready = false
         var first_time = true
@@ -55,13 +51,17 @@
         var canvas_el
         var start_button
 
-        var prev_note = {letter:"", accidental: ""}
+        var prev_note = {
+            letter: "",
+            accidental: ""
+        }
 
         // configurable stuff
         var queue = []
         var cents_threshold
         var queue_length
         var fftSize
+        var yin_buffer
         var sharps_or_flats
         var clef
         var high_ledger_line_indexes
@@ -71,9 +71,8 @@
         const yin_threshold = 0.1
         const yin_probabilityThreshold = 0.1
 
-        // canvas
+        // canvas context
         var ctx
-
 
         function on_load() {
 
@@ -97,7 +96,10 @@
 
         function init_web_audio() {
 
-            navigator.mediaDevices.getUserMedia(user_media_constraints)
+            navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: false
+                })
                 .then(function (stream) {
                     media_stream_source = audioCtx.createMediaStreamSource(stream);
                     media_stream_source.connect(analyser);
@@ -248,6 +250,27 @@
             analyser.fftSize = fftsize_input.value
             fft_array = new Float32Array(analyser.fftSize)
 
+            // Copied from yin algo function, to get mem allocation out of the loop
+            // Set buffer size to the highest power of two below the provided buffer's length.
+            let bufferSize;
+            for (bufferSize = 1; bufferSize < fft_array.length; bufferSize *= 2);
+            bufferSize /= 2;
+
+            // Set up the yinBuffer as described in step one of the YIN paper.
+            //yin_buffer = new Float32Array(bufferSize / 2);
+            // end of copy
+
+            // corey says... results of above are:
+            // 2048 = 512
+            // 4096 = 1024
+            // 8192 = 2048
+            // 16384 = 4096
+            // 32768 = 8192
+
+            // corey says.. i don't understand the power of 2 stuff, versus half buffer size
+            // so let's try divided by 2
+            yin_buffer = new Float32Array(fft_array.length / 2)
+
             note_el.innerText = ""
             running = true
             draw_staff()
@@ -267,7 +290,7 @@
             // Get data representing the shape of the wave
             analyser.getFloatTimeDomainData(fft_array);
 
-            let freq = (get_freq_via_yin(fft_array, yin_threshold, yin_probabilityThreshold))
+            let freq = (get_freq_via_yin(fft_array, yin_buffer, yin_threshold, yin_probabilityThreshold))
 
             if (freq) {
 
@@ -330,7 +353,7 @@
             // so don't increment x coordinate, but if it is a different note, then increment
 
             if (note.letter != prev_note.letter) {
-                
+
                 current_x += note_spacing
 
                 // the previous note took up more room, so move to the right more
@@ -428,7 +451,7 @@
                     ctx.lineTo(acc_x, y + (line_height / 2))
                     ctx.stroke();
 
-                    // a flat's half circle
+                    // A flat's half circle, slightly rotated. A real one is prettier than just a thin line.
                     ctx.ellipse(
                         acc_x + 3,
                         y,
@@ -494,7 +517,7 @@
                 }
             }
 
-            note_el.innerText = note.letter + ", cents: " + note.cents + ", freq: " + parseFloat(note.freq).toFixed(2)
+            note_el.innerText = note.letter + " " + parseFloat(note.freq).toFixed(2) + ", cents: " + note.cents
 
             prev_note = note
         }
@@ -521,34 +544,38 @@
                     ctx.moveTo(0, y)
                     ctx.lineTo(canvas_width, y)
                     ctx.stroke()
-                }draw_staff
+                }
+                draw_staff
             }
 
             staff_number = 1
             current_x = 0
-            prev_note = {letter:"", accidental: ""}
+            prev_note = {
+                letter: "",
+                accidental: ""
+            }
         }
 
-
+        // Corey says...
+        // Implementation of the algorithm described way over my head here: http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf
+        // The paper has charts that explain the settings of the variables "threshold and probabilityThreshold". 
+        // They seem to have figured out the best comprimise for their values, I guess.
+        //
         // from https://github.com/peterkhayes/pitchfinder/blob/master/src/detectors/yin.ts
-        function get_freq_via_yin(fft_array, threshold, probabilityThreshold) {
-
-            // Set buffer size to the highest power of two below the provided buffer's length.
-            let bufferSize;
-            for (bufferSize = 1; bufferSize < fft_array.length; bufferSize *= 2);
-            bufferSize /= 2;
-
-            // Set up the yinBuffer as described in step one of the YIN paper.
-            const yinBufferLength = bufferSize / 2;
-            const yinBuffer = new Float32Array(yinBufferLength);
+        // and tweaked per https://github.com/ashokfernandez/Yin-Pitch-Tracking/blob/master/Yin.c
+        // One of them is copied from the other, but they differ in terms of the yinBuffer
+        // length. I moved the logic for creating the buffer out of the loop for efficiency.
+        function get_freq_via_yin(fft_array, yinBuffer, threshold, probabilityThreshold) {
 
             let probability = 0,
                 tau;
 
-            // Compute the difference function as described in step 2 of the YIN paper.
-            for (let t = 0; t < yinBufferLength; t++) {
-                yinBuffer[t] = 0;
-            }
+            let yinBufferLength = yinBuffer.length
+
+            yinBuffer.fill(0)
+
+            // Corey says...The offset has the variable name "t" for tau
+            // This is autocorrelation but using the square of the difference instead of the plain difference
             for (let t = 1; t < yinBufferLength; t++) {
                 for (let i = 0; i < yinBufferLength; i++) {
                     const delta = fft_array[i] - fft_array[i + t];
@@ -597,13 +624,19 @@
                 return null;
             }
 
-            /**
+            /*
              * Implements step 5 of the AUBIO_YIN paper. It refines the estimated tau
              * value using parabolic interpolation. This is needed to detect higher
              * frequencies more precisely. See http://fizyka.umk.pl/nrbook/c10-2.pdf and
              * for more background
              * http://fedc.wiwi.hu-berlin.de/xplore/tutorials/xegbohtmlnode62.html
              */
+
+            /* The 'best' shift value for autocorellation is most likely not an interger shift of the signal.
+             * As we only autocorellated using integer shifts we should check that there isn't a better fractional 
+             * shift value.
+             */
+
             let betterTau, x0, x2;
             if (tau < 1) {
                 x0 = tau;
@@ -681,7 +714,7 @@
             //  if ((input < 27.5) || (input > 14080))
 
             // Corey says...low end, guitar E string, high end violin high b on e string
-            // We want to filter out more extreme notes which tend to be noise
+            // We want to filter out more extreme notes which tend to be noise, harmonics
             if ((input < 160) || (input > 2000))
                 return null
 
@@ -772,7 +805,7 @@
     <div>
         <button id="start_button" onclick="toggle_start_stop()">Click to Start</button>
     </div>
-    
+
     <div>Sensitivity - Smaller is less forgiving to out of tune notes (2 to 40):
         <input id="cents_threshold_input" onchange="restart()" value="12" type="number" min="2" max="40"></input>
     </div>
@@ -816,13 +849,13 @@
 
     <div>Steady factor - Bigger is maybe more accurate at pitch detection but slower to respond.
         <br>The app takes the most frequently occuring pitch from the last N samples (3 to 60):
-        <input id="steady_factor_input" onchange="restart()" value="30" type="number" min="3" max="60"></input>
+        <input id="steady_factor_input" onchange="restart()" value="12" type="number" min="3" max="60"></input>
     </div>
 
     <div>fftSize - Bigger is more accurate but slower to respond. Fast Fourier Transform window size:
         <select id="fftsize_input" onchange="restart()">
             <option value="2048">2048</option>
-            <option value="4096">4096</option>
+            <option value="4096" selected>4096</option>
             <option value="8192">8192</option>
             <option value="16384">16384</option>
             <option value="32768">32768</option>
@@ -830,10 +863,12 @@
     </div>
 
     <div>
-        by <a href="https://ctrager.github.io">Corey Trager</a> - <a href="https://github.com/ctrager/pitch_detector">https://github.com/ctrager/pitch_detector</a>
+        by <a href="https://ctrager.github.io">Corey Trager</a> - <a
+            href="https://github.com/ctrager/pitch_detector">https://github.com/ctrager/pitch_detector</a>
         &nbsp;
         <a href="https://ctrager.github.io/music_tools">More tools</a>
     </div>
 
 </body>
+
 </html>
