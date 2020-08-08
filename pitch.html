@@ -122,9 +122,7 @@
             cents_threshold = cents_threshold_input.value
         }
 
-
         var note_letters
-
 
         function set_sharps_or_flats(val) {
             sharps_or_flats = val
@@ -345,7 +343,7 @@
             }
 
             // Transpose the octave.
-            // A#4 can become A#3 or A#5, etc
+            // A4 can become A3 or A5, etc
             note.octave = note.octave += parseInt(transpose_octave_input.value)
             note.letter = note.just_letter + note.accidental + note.octave
 
