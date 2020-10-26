@@ -711,9 +711,9 @@
         function frequency_to_note(input) {
             //  if ((input < 27.5) || (input > 14080))
 
-            // Corey says...low end, guitar E string, high end violin high b on e string
+            // Corey says...low end, viola C string, high end violin high b on e string
             // We want to filter out more extreme notes which tend to be noise, harmonics
-            if ((input < 160) || (input > 2000))
+            if ((input < 124) || (input > 2000))
                 return null
 
             var frequency;
