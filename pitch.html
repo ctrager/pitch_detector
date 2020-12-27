@@ -33,6 +33,8 @@
     </style>
 
     <script type="text/javascript">
+        "use strict"
+
         // web audio stuff
         var audioCtx
         var analyser
@@ -48,6 +50,7 @@
         var cents_threshold_input
         var steady_factor_input
         var fftsize_input
+        var transpose_octave_input
         var canvas_el
         var start_button
 
@@ -97,9 +100,9 @@
         function init_web_audio() {
 
             navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: false
-                })
+                audio: true,
+                video: false
+            })
                 .then(function (stream) {
                     media_stream_source = audioCtx.createMediaStreamSource(stream);
                     media_stream_source.connect(analyser);
@@ -239,7 +242,7 @@
             set_config()
 
             if (first_time) {
-                audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioCtx.createAnalyser();
                 first_time = false
                 init_web_audio()
